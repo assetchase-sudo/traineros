@@ -89,6 +89,10 @@ export default function TrainerOS() {
         const isAdmin = admin === true;
         await load(isAdmin);
         if (isAdmin) setRole("trainer");
+        if (typeof window !== "undefined" && window.location.search.includes("checkout=success")) {
+          setTimeout(() => { load(isAdmin); }, 4000);
+          window.history.replaceState({}, "", window.location.pathname);
+        }
       } catch (e) { flash("Load error: " + (e.message || e)); }
       setLoading(false);
     })();
@@ -189,6 +193,19 @@ export default function TrainerOS() {
     else setStatus(sid, "cancelled", false, "Cancelled \u2014 no session used");
   };
 
+  const startCheckout = async (memberId) => {
+    try {
+      const res = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId }),
+      });
+      const data = await res.json();
+      if (data.url) { window.location.href = data.url; }
+      else { flash(data.error || "Could not start checkout"); }
+    } catch (e) { flash("Checkout error: " + (e.message || e)); }
+  };
+
   const signOut = async () => { await supabase.auth.signOut(); setRole(null); setClients([]); setSessions([]); };
 
   /* ---- render ---- */
@@ -203,7 +220,8 @@ export default function TrainerOS() {
       <Shell>
         <TopBar role="client" name={me?.name} onSignOut={signOut} />
         <ClientView client={me} sessions={sessions.filter((s) => s.clientId === me.id)}
-          onBook={() => setBooking({ clientId: me.id })} onCancel={cancelSession} />
+          onBook={() => setBooking({ clientId: me.id })} onCancel={cancelSession}
+          onAutopay={() => startCheckout(me.id)} />
         {booking && <BookingModal booking={booking} clients={clients} clientOf={clientOf} onBook={book} onClose={() => setBooking(null)} />}
         {toast && <div className="tos-toast">{toast}</div>}
         <StyleTag />
@@ -575,7 +593,7 @@ function BookingModal({ booking, clients, clientOf, onBook, onClose }) {
   );
 }
 
-function ClientView({ client, sessions, onBook, onCancel }) {
+function ClientView({ client, sessions, onBook, onCancel, onAutopay }) {
   if (!client) return <div className="tos-page"><div className="tos-empty">Select a member to preview their view.</div></div>;
   const t = TIERS[client.tier];
   const upcoming = sessions.filter((s) => s.status === "booked" && new Date(s.start) >= new Date()).sort((a,b)=> new Date(a.start)-new Date(b.start));
@@ -589,8 +607,11 @@ function ClientView({ client, sessions, onBook, onCancel }) {
           <Tank remaining={client.sessionsRemaining} total={t.sessions} />
           <div className="tos-hero-count"><span className="tos-mono xl">{client.sessionsRemaining}</span><em>sessions left this month</em></div>
         </div>
-        <div className="tos-hero-bill">Next payment {fmtDate(client.billingDate)} · {client.cardOnFile ? "auto-charged to card on file" : "add a card to enable auto-pay"}</div>
-        <button className="tos-btn big" onClick={onBook}>Book a session</button>
+        <div className="tos-hero-bill">Next payment {fmtDate(client.billingDate)} · {client.cardOnFile ? "auto-charged to card on file" : "set up autopay to reserve your spot"}</div>
+        <div className="tos-hero-actions">
+          {!client.cardOnFile && <button className="tos-btn big autopay" onClick={onAutopay}>Set up autopay</button>}
+          <button className="tos-btn big" onClick={onBook}>Book a session</button>
+        </div>
       </div>
 
       <div className="tos-clientcard">
@@ -649,6 +670,9 @@ function StyleTag() {
       .tos-hello{ color:rgba(255,255,255,.85); font-size:14px; }
       .tos-signout{ border:1px solid rgba(255,255,255,.25); background:transparent; color:#fff; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
       .tos-signout:hover{ background:rgba(255,255,255,.1); }
+      .tos-hero-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+      .tos-btn.big.autopay{ background:#0F7A54; }
+      .tos-btn.big.autopay:hover{ background:#0c6344; }
       .tos-splash{ max-width:520px; margin:0 auto; padding:80px 24px; text-align:center; color:var(--muted); font-family:'Inter',sans-serif; line-height:1.6; font-size:15px; }
 
       .tos-select{ background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px 10px;
