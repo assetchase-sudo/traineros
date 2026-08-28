@@ -123,8 +123,9 @@ export default function TrainerOS() {
 
   const addClient = async (data) => {
     const tier = TIERS[data.tier];
+    const email = data.email.trim();
     const { error } = await supabase.from("members").insert({
-      name: data.name.trim(), email: data.email.trim(), tier: data.tier,
+      name: data.name.trim(), email, tier: data.tier,
       sessions_remaining: tier.sessions, billing_date: iso(addDays(new Date(), 30)),
       status: "active", card_on_file: false,
     });
@@ -132,6 +133,17 @@ export default function TrainerOS() {
     if (error) return flash(error.message);
     flash(`${data.name} added on ${tier.name}`);
     reload();
+    // auto-send a welcome email with a one-click login link
+    try {
+      const res = await fetch("/api/invite-member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, name: data.name.trim(), tier: data.tier }),
+      });
+      const r = await res.json();
+      if (r.sent) flash(`Welcome email sent to ${email}`);
+      else flash("Added, but welcome email didn't send");
+    } catch (e) { flash("Added, but welcome email didn't send"); }
   };
 
   const removeClient = async (id) => {
