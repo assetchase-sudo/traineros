@@ -25,6 +25,8 @@ const TIERS = {
   essential: { key: "essential", name: "Essential", sessions: 4,  price: 500,  per: 125 },
   committed: { key: "committed", name: "Committed", sessions: 8,  price: 920,  per: 115 },
   elite:     { key: "elite",     name: "Elite",     sessions: 12, price: 1260, per: 105 },
+  champion:  { key: "champion",  name: "Champion",  sessions: 20, price: 1900, per: 95 },
+  eliteplus: { key: "eliteplus", name: "Elite Plus", sessions: 8, price: 1840, per: 230 },
 };
 
 const WORK_START = 6;   // 6am
@@ -190,10 +192,41 @@ export default function TrainerOS() {
     reload();
   };
 
+  // Does the client still have any of their usual training weekdays left this month?
+  // (Used to avoid nudging when the month is effectively over for them.)
+  const hasUsualTrainingDaysLeft = (clientId) => {
+    const mine = sessions.filter((s) => s.clientId === clientId);
+    const weekdays = new Set(mine.map((s) => new Date(s.start).getDay()));
+    if (weekdays.size === 0) return false;
+    const now = new Date();
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 1);
+    while (d <= end) {
+      if (weekdays.has(d.getDay())) return true;
+      d.setDate(d.getDate() + 1);
+    }
+    return false;
+  };
+
+  const maybeNudge = (clientId) => {
+    const c = clientOf(clientId);
+    if (!c) return;
+    if (!hasUsualTrainingDaysLeft(clientId)) return; // month is basically over for them — skip
+    fetch("/api/nudge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId: clientId }),
+    }).catch(() => {});
+  };
+
   const setStatus = async (sid, status, consume, msg) => {
+    const target = sessions.find((x) => x.id === sid);
+    const preRemaining = target ? (clientOf(target.clientId)?.sessionsRemaining ?? 0) : null;
     const { error } = await supabase.rpc("set_session_status", { p_session: sid, p_status: status, p_consume: consume });
     if (error) return flash(error.message);
     flash(msg);
+    // If this action used their final session, consider sending the out-of-sessions nudge.
+    if (consume && target && preRemaining === 1) maybeNudge(target.clientId);
     reload();
   };
   const completeSession = (sid) => setStatus(sid, "completed", true, "Session completed \u2014 1 deducted");
