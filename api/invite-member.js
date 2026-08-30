@@ -8,6 +8,8 @@ const TIER_LABELS = {
   essential: 'Essential (4 sessions/month)',
   committed: 'Committed (8 sessions/month)',
   elite: 'Elite (12 sessions/month)',
+  champion: 'Champion (20 sessions/month)',
+  eliteplus: 'Elite Plus (8 double sessions/month)',
 }
 
 export async function POST(request) {
@@ -15,8 +17,10 @@ export async function POST(request) {
     const { email, name, tier } = await request.json()
     if (!email) return Response.json({ error: 'Email required' }, { status: 400 })
 
+    // Make sure an auth user exists for this email (ignore "already registered")
     await supabase.auth.admin.createUser({ email, email_confirm: true }).catch(() => {})
 
+    // Generate a one-click login (magic) link that lands them in the app
     const { data, error } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email,

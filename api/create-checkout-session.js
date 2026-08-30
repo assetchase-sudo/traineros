@@ -9,6 +9,8 @@ const PRICES = {
   essential: process.env.STRIPE_PRICE_ESSENTIAL,
   committed: process.env.STRIPE_PRICE_COMMITTED,
   elite: process.env.STRIPE_PRICE_ELITE,
+  champion: process.env.STRIPE_PRICE_CHAMPION,
+  eliteplus: process.env.STRIPE_PRICE_ELITEPLUS,
 }
 
 export async function POST(request) {
